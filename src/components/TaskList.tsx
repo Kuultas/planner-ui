@@ -1,4 +1,4 @@
-import { Button, Input, makeStyles, mergeClasses, tokens } from "@fluentui/react-components";
+import { Button, Dropdown, Input, makeStyles, mergeClasses, Option, tokens } from "@fluentui/react-components";
 import { Search24Regular, Settings24Regular } from "@fluentui/react-icons";
 import { useMemo, useState } from "react";
 import { TeamName, Urgency, WorkItem } from "../types";
@@ -24,50 +24,9 @@ const useStyles = makeStyles({
     padding: "6px 12px",
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     display: "flex",
-    flexDirection: "column",
     gap: "6px",
+    alignItems: "center",
     flexShrink: 0
-  },
-  pills: {
-    display: "flex",
-    gap: "4px",
-    flexWrap: "wrap"
-  },
-  pill: {
-    fontSize: "10px",
-    fontWeight: 500,
-    paddingTop: "2px",
-    paddingBottom: "2px",
-    paddingLeft: "8px",
-    paddingRight: "8px",
-    borderRadius: "10px",
-    cursor: "pointer",
-    borderTopWidth: "1px",
-    borderTopStyle: "solid",
-    borderTopColor: tokens.colorNeutralStroke2,
-    borderRightWidth: "1px",
-    borderRightStyle: "solid",
-    borderRightColor: tokens.colorNeutralStroke2,
-    borderBottomWidth: "1px",
-    borderBottomStyle: "solid",
-    borderBottomColor: tokens.colorNeutralStroke2,
-    borderLeftWidth: "1px",
-    borderLeftStyle: "solid",
-    borderLeftColor: tokens.colorNeutralStroke2,
-    backgroundColor: tokens.colorNeutralBackground1,
-    color: tokens.colorNeutralForeground2,
-    userSelect: "none",
-    ":hover": {
-      backgroundColor: tokens.colorNeutralBackground1Hover
-    }
-  },
-  pillActive: {
-    backgroundColor: tokens.colorBrandBackground2,
-    color: tokens.colorBrandForeground2,
-    borderTopColor: tokens.colorBrandStroke1,
-    borderRightColor: tokens.colorBrandStroke1,
-    borderBottomColor: tokens.colorBrandStroke1,
-    borderLeftColor: tokens.colorBrandStroke1
   },
   list: {
     flex: 1,
@@ -136,31 +95,22 @@ function groupByUrgency(items: WorkItem[], today: string): Grouped {
 export function TaskList({ workItems, today }: Props) {
   const styles = useStyles();
   const [search, setSearch] = useState("");
-  const [activeTeams, setActiveTeams] = useState<Set<TeamName>>(new Set());
+  const [selectedTeam, setSelectedTeam] = useState<TeamName | "">("");
 
   const teams = useMemo(
     () => Array.from(new Set(workItems.map((wi) => wi.teamName))).sort(),
     [workItems]
   );
 
-  const toggleTeam = (team: TeamName) => {
-    setActiveTeams((prev) => {
-      const next = new Set(prev);
-      if (next.has(team)) next.delete(team);
-      else next.add(team);
-      return next;
-    });
-  };
-
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return workItems.filter((wi) => {
-      if (activeTeams.size > 0 && !activeTeams.has(wi.teamName)) return false;
+      if (selectedTeam && wi.teamName !== selectedTeam) return false;
       if (q && !wi.title.toLowerCase().includes(q) && !String(wi.id).includes(q))
         return false;
       return true;
     });
-  }, [workItems, search, activeTeams]);
+  }, [workItems, search, selectedTeam]);
 
   const grouped = groupByUrgency(filtered, today);
 
@@ -186,24 +136,28 @@ export function TaskList({ workItems, today }: Props) {
           contentBefore={<Search24Regular />}
           placeholder="Filter tasks..."
           size="small"
-          style={{ width: "100%" }}
+          style={{ flex: 1 }}
           value={search}
           onChange={(_, data) => setSearch(data.value)}
         />
-        <div className={styles.pills}>
+        <Dropdown
+          size="small"
+          placeholder="All projects"
+          style={{ minWidth: "130px" }}
+          value={selectedTeam || "All projects"}
+          selectedOptions={selectedTeam ? [selectedTeam] : []}
+          onOptionSelect={(_, data) => {
+            setSelectedTeam(
+              data.optionValue === selectedTeam ? "" : (data.optionValue as TeamName) ?? ""
+            );
+          }}
+        >
           {teams.map((team) => (
-            <button
-              key={team}
-              className={mergeClasses(
-                styles.pill,
-                activeTeams.has(team) ? styles.pillActive : undefined
-              )}
-              onClick={() => toggleTeam(team)}
-            >
+            <Option key={team} value={team}>
               {team}
-            </button>
+            </Option>
           ))}
-        </div>
+        </Dropdown>
       </div>
       <div className={styles.list}>
         {renderGroup("Overdue", styles.groupOverdue, grouped.overdue, "overdue")}
