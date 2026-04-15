@@ -351,7 +351,7 @@ export function Timeline({ workItems }: Props) {
                   key={e.id}
                   event={e}
                   dayStartMinutes={DAY_START_MINUTES}
-                  associatedBlocks={associatedBlocksByEvent.get(e.id) ?? []}
+                  associatedBlocks={[]}
                   linkedEntry={me}
                   linkedWorkItem={linkedWi}
                   overlapSide={meetingsWithOverlap.has(e.id) ? "left" : undefined}
