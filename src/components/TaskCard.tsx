@@ -4,17 +4,18 @@ import { Urgency, WorkItem } from "../types";
 
 const useStyles = makeStyles({
   root: {
-    padding: "8px 10px",
-    marginBottom: "4px",
+    padding: "4px 8px",
+    marginBottom: "2px",
     backgroundColor: tokens.colorNeutralBackground1,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: "6px",
+    borderRadius: "4px",
     cursor: "grab",
     display: "flex",
-    flexDirection: "column",
-    gap: "3px",
+    alignItems: "center",
+    gap: "8px",
     userSelect: "none",
     touchAction: "none",
+    minHeight: "26px",
     ":hover": {
       backgroundColor: tokens.colorNeutralBackground1Hover
     }
@@ -45,20 +46,35 @@ const useStyles = makeStyles({
   title: {
     fontSize: "11px",
     fontWeight: 600,
-    color: tokens.colorNeutralForeground1
+    color: tokens.colorNeutralForeground1,
+    flex: 1,
+    minWidth: 0,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis"
   },
-  meta: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center"
+  id: {
+    fontSize: "9px",
+    color: tokens.colorNeutralForeground3,
+    flexShrink: 0
   },
-  sub: {
-    fontSize: "10px",
-    color: tokens.colorNeutralForeground3
+  team: {
+    fontSize: "9px",
+    color: tokens.colorNeutralForeground3,
+    paddingTop: "1px",
+    paddingBottom: "1px",
+    paddingLeft: "5px",
+    paddingRight: "5px",
+    borderRadius: "3px",
+    backgroundColor: tokens.colorNeutralBackground3,
+    whiteSpace: "nowrap",
+    flexShrink: 0
   },
   due: {
     fontSize: "9px",
-    fontWeight: 500
+    fontWeight: 500,
+    whiteSpace: "nowrap",
+    flexShrink: 0
   },
   dueOverdue: { color: "#d13438" },
   dueToday: { color: "#ca5010" },
@@ -109,16 +125,13 @@ export function TaskCard({ workItem, urgency }: Props) {
       )}
     >
       <div className={styles.title}>{workItem.title}</div>
-      <div className={styles.meta}>
-        <span className={styles.sub}>
-          {workItem.teamName} · #{workItem.id}
+      <span className={styles.team}>{workItem.teamName}</span>
+      <span className={styles.id}>#{workItem.id}</span>
+      {workItem.dueDate && (
+        <span className={mergeClasses(styles.due, styles[urgencyDueMap[urgency]])}>
+          {formatShortDate(workItem.dueDate)}
         </span>
-        {workItem.dueDate && (
-          <span className={mergeClasses(styles.due, styles[urgencyDueMap[urgency]])}>
-            Due {formatShortDate(workItem.dueDate)}
-          </span>
-        )}
-      </div>
+      )}
     </div>
   );
 }
@@ -141,11 +154,8 @@ export function TaskCardGhost({
       style={{ width: "280px" }}
     >
       <div className={styles.title}>{workItem.title}</div>
-      <div className={styles.meta}>
-        <span className={styles.sub}>
-          {workItem.teamName} · #{workItem.id}
-        </span>
-      </div>
+      <span className={styles.team}>{workItem.teamName}</span>
+      <span className={styles.id}>#{workItem.id}</span>
     </div>
   );
 }

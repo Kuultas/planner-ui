@@ -1,6 +1,7 @@
 import { Button, Input, makeStyles, mergeClasses, tokens } from "@fluentui/react-components";
 import { Search24Regular, Settings24Regular } from "@fluentui/react-icons";
-import { Urgency, WorkItem } from "../types";
+import { useMemo, useState } from "react";
+import { TeamName, Urgency, WorkItem } from "../types";
 import { TaskCard } from "./TaskCard";
 
 const useStyles = makeStyles({
@@ -19,10 +20,54 @@ const useStyles = makeStyles({
     alignItems: "center",
     flexShrink: 0
   },
-  search: {
-    padding: "8px 12px",
+  filters: {
+    padding: "6px 12px",
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
     flexShrink: 0
+  },
+  pills: {
+    display: "flex",
+    gap: "4px",
+    flexWrap: "wrap"
+  },
+  pill: {
+    fontSize: "10px",
+    fontWeight: 500,
+    paddingTop: "2px",
+    paddingBottom: "2px",
+    paddingLeft: "8px",
+    paddingRight: "8px",
+    borderRadius: "10px",
+    cursor: "pointer",
+    borderTopWidth: "1px",
+    borderTopStyle: "solid",
+    borderTopColor: tokens.colorNeutralStroke2,
+    borderRightWidth: "1px",
+    borderRightStyle: "solid",
+    borderRightColor: tokens.colorNeutralStroke2,
+    borderBottomWidth: "1px",
+    borderBottomStyle: "solid",
+    borderBottomColor: tokens.colorNeutralStroke2,
+    borderLeftWidth: "1px",
+    borderLeftStyle: "solid",
+    borderLeftColor: tokens.colorNeutralStroke2,
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: tokens.colorNeutralForeground2,
+    userSelect: "none",
+    ":hover": {
+      backgroundColor: tokens.colorNeutralBackground1Hover
+    }
+  },
+  pillActive: {
+    backgroundColor: tokens.colorBrandBackground2,
+    color: tokens.colorBrandForeground2,
+    borderTopColor: tokens.colorBrandStroke1,
+    borderRightColor: tokens.colorBrandStroke1,
+    borderBottomColor: tokens.colorBrandStroke1,
+    borderLeftColor: tokens.colorBrandStroke1
   },
   list: {
     flex: 1,
@@ -32,7 +77,7 @@ const useStyles = makeStyles({
   groupLabel: {
     fontSize: "10px",
     fontWeight: 600,
-    padding: "10px 4px 4px",
+    padding: "8px 4px 3px",
     textTransform: "uppercase",
     letterSpacing: "0.5px"
   },
@@ -90,7 +135,34 @@ function groupByUrgency(items: WorkItem[], today: string): Grouped {
 
 export function TaskList({ workItems, today }: Props) {
   const styles = useStyles();
-  const grouped = groupByUrgency(workItems, today);
+  const [search, setSearch] = useState("");
+  const [activeTeams, setActiveTeams] = useState<Set<TeamName>>(new Set());
+
+  const teams = useMemo(
+    () => Array.from(new Set(workItems.map((wi) => wi.teamName))).sort(),
+    [workItems]
+  );
+
+  const toggleTeam = (team: TeamName) => {
+    setActiveTeams((prev) => {
+      const next = new Set(prev);
+      if (next.has(team)) next.delete(team);
+      else next.add(team);
+      return next;
+    });
+  };
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return workItems.filter((wi) => {
+      if (activeTeams.size > 0 && !activeTeams.has(wi.teamName)) return false;
+      if (q && !wi.title.toLowerCase().includes(q) && !String(wi.id).includes(q))
+        return false;
+      return true;
+    });
+  }, [workItems, search, activeTeams]);
+
+  const grouped = groupByUrgency(filtered, today);
 
   const renderGroup = (label: string, labelClass: string, items: WorkItem[], urgency: Urgency) => {
     if (items.length === 0) return null;
@@ -107,15 +179,31 @@ export function TaskList({ workItems, today }: Props) {
   return (
     <div className={styles.root}>
       <div className={styles.header}>
-        <span className={styles.count}>{workItems.length} items</span>
+        <span className={styles.count}>{filtered.length} items</span>
       </div>
-      <div className={styles.search}>
+      <div className={styles.filters}>
         <Input
           contentBefore={<Search24Regular />}
           placeholder="Filter tasks..."
           size="small"
           style={{ width: "100%" }}
+          value={search}
+          onChange={(_, data) => setSearch(data.value)}
         />
+        <div className={styles.pills}>
+          {teams.map((team) => (
+            <button
+              key={team}
+              className={mergeClasses(
+                styles.pill,
+                activeTeams.has(team) ? styles.pillActive : undefined
+              )}
+              onClick={() => toggleTeam(team)}
+            >
+              {team}
+            </button>
+          ))}
+        </div>
       </div>
       <div className={styles.list}>
         {renderGroup("Overdue", styles.groupOverdue, grouped.overdue, "overdue")}
