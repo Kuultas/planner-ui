@@ -204,6 +204,35 @@ const useStyles = makeStyles({
     borderLeftColor: PLANNED_BORDER,
     color: PLANNED_BORDER
   },
+  updateBtn: {
+    fontSize: "9px",
+    fontWeight: 600,
+    paddingTop: "2px",
+    paddingRight: "6px",
+    paddingBottom: "2px",
+    paddingLeft: "6px",
+    borderRadius: "10px",
+    whiteSpace: "nowrap",
+    lineHeight: 1.2,
+    flexShrink: 0,
+    cursor: "pointer",
+    backgroundColor: "#1976d2",
+    color: "#fff",
+    borderTopWidth: "0",
+    borderRightWidth: "0",
+    borderBottomWidth: "0",
+    borderLeftWidth: "0",
+    ":hover": {
+      backgroundColor: "#1565c0"
+    }
+  },
+  updateBtnTiny: {
+    fontSize: "8px",
+    paddingTop: "1px",
+    paddingBottom: "1px",
+    paddingLeft: "5px",
+    paddingRight: "5px"
+  },
   resizeHandle: {
     position: "absolute",
     bottom: 0,
@@ -262,6 +291,7 @@ export function TaskBlock({
 
   const resizeStartY = useRef(0);
   const resizeStartDuration = useRef(0);
+  const resizeStartState = useRef(block.state);
   const [isResizing, setIsResizing] = useState(false);
 
   const top = (block.startMinutes - dayStartMinutes) * MINUTE_HEIGHT;
@@ -274,12 +304,15 @@ export function TaskBlock({
   const isCompact = duration < 40;
   const isTiny = duration < 25;
 
+  const needsUpdate = block.state === "planned" && !!block.freshbooksEntryId;
+
   const onResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     resizeStartY.current = e.clientY;
     resizeStartDuration.current = block.durationMinutes;
+    resizeStartState.current = block.state;
     setIsResizing(true);
   };
 
@@ -314,9 +347,13 @@ export function TaskBlock({
   };
 
   const onResizePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const durationChanged = block.durationMinutes !== resizeStartDuration.current;
     setIsResizing(false);
     if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    }
+    if (resizeStartState.current === "logged" && durationChanged) {
+      updateBlock(block.instanceId, { state: "planned" });
     }
   };
 
@@ -331,7 +368,33 @@ export function TaskBlock({
       : styles.plannedOverlap
     : undefined;
 
-  const badge = (
+  const handleUpdateEntry = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    updateBlock(block.instanceId, { state: "logged" });
+  };
+
+  const badge = needsUpdate ? (
+    <>
+      <span
+        className={mergeClasses(
+          styles.badge,
+          styles.badgePlanned,
+          isTiny ? styles.badgeTiny : undefined
+        )}
+      >
+        {formatDuration(block.durationMinutes)} planned
+      </span>
+      <button
+        className={mergeClasses(
+          styles.updateBtn,
+          isTiny ? styles.updateBtnTiny : undefined
+        )}
+        onClick={handleUpdateEntry}
+      >
+        Update
+      </button>
+    </>
+  ) : (
     <span
       className={mergeClasses(
         styles.badge,
