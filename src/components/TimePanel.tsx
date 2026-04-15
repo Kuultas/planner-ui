@@ -11,14 +11,15 @@ import {
   Checkmark16Regular,
   Clock16Regular,
   Delete16Regular,
+  Dismiss16Regular,
   Link16Regular,
   Timer16Regular
 } from "@fluentui/react-icons";
 import { useEffect, useRef } from "react";
 import { useDayStore } from "../state/useDayStore";
-import { CalendarEvent, MeetingTimeEntry, WorkItem } from "../types";
+import { CalendarEvent, WorkItem } from "../types";
 import { fakeCalendarEvents } from "../data/fakeCalendarEvents";
-import { formatClock, formatDuration, parseIsoToMinutes } from "../utils/timeGrid";
+import { formatClock, formatDuration, parseIsoToMinutes, SNAP_MINUTES } from "../utils/timeGrid";
 
 const PLANNED_BORDER = "#fb8c00";
 const LOGGED_BORDER = "#43a047";
@@ -58,6 +59,7 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     padding: "8px 4px 4px"
   },
+  // Task block entries
   entry: {
     display: "flex",
     flexDirection: "column",
@@ -131,7 +133,7 @@ const useStyles = makeStyles({
     color: MEETING_BORDER,
     fontWeight: 500
   },
-  // Unlinked meetings
+  // Meeting entries
   meetingEntry: {
     display: "flex",
     flexDirection: "column",
@@ -175,43 +177,34 @@ const useStyles = makeStyles({
     flex: 1,
     minWidth: 0
   },
-  // Linked meeting entries (nested under task)
-  nestedMeeting: {
+  linkedTaskRow: {
     display: "flex",
-    flexDirection: "column",
-    gap: "4px",
-    padding: "6px 8px",
-    marginLeft: "8px",
-    marginTop: "2px",
-    borderRadius: "4px",
-    borderLeftWidth: "2px",
-    borderLeftStyle: "solid",
-    borderLeftColor: MEETING_BORDER,
-    backgroundColor: "#f5f5ff",
+    alignItems: "center",
+    gap: "6px",
     fontSize: "11px"
   },
-  nestedHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "6px"
-  },
-  nestedSubject: {
+  linkedTaskLabel: {
     fontWeight: 600,
-    color: "#444",
+    color: tokens.colorNeutralForeground1,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
     flex: 1,
     minWidth: 0
   },
+  durationRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px"
+  },
   durationInput: {
     width: "70px"
   },
-  nestedActions: {
+  meetingActions: {
     display: "flex",
     gap: "4px",
-    alignItems: "center"
+    alignItems: "center",
+    flexWrap: "wrap"
   },
   empty: {
     padding: "16px",
@@ -244,18 +237,7 @@ export function TimePanel({ workItems }: Props) {
   const events = fakeCalendarEvents.filter((e) => e.start.startsWith(currentDate));
   const workItemById = new Map(workItems.map((wi) => [wi.id, wi]));
   const eventById = new Map(events.map((e) => [e.id, e]));
-
-  // Figure out which meetings are linked via meetingEntries
-  const linkedEventIds = new Set(meetingEntries.map((me) => me.eventId));
-  const unlinkedEvents = events.filter((e) => !linkedEventIds.has(e.id));
-
-  // Group meeting entries by workItemId
-  const meetingEntriesByWorkItem = new Map<number, MeetingTimeEntry[]>();
-  for (const me of meetingEntries) {
-    const list = meetingEntriesByWorkItem.get(me.workItemId) ?? [];
-    list.push(me);
-    meetingEntriesByWorkItem.set(me.workItemId, list);
-  }
+  const meetingEntryByEventId = new Map(meetingEntries.map((me) => [me.eventId, me]));
 
   // Stats
   const loggedMinutes = dateBlocks
@@ -298,6 +280,17 @@ export function TimePanel({ workItems }: Props) {
     });
   };
 
+  const handleRelinkMeeting = (eventId: string, newWorkItemId: number) => {
+    updateMeetingEntry(eventId, { workItemId: newWorkItemId });
+  };
+
+  const stepDuration = (eventId: string, current: number, delta: number) => {
+    const next = current + delta;
+    if (next >= SNAP_MINUTES) {
+      updateMeetingEntry(eventId, { durationMinutes: next });
+    }
+  };
+
   return (
     <div className={styles.root}>
       <div className={styles.header}>
@@ -306,189 +299,121 @@ export function TimePanel({ workItems }: Props) {
         </span>
       </div>
       <div className={styles.list} ref={listRef}>
-        {/* Time Entries (task blocks) */}
+        {/* Task block entries */}
         {dateBlocks.length > 0 && (
           <>
-            <div className={styles.sectionLabel}>Time Entries</div>
+            <div className={styles.sectionLabel}>Task Entries</div>
             {dateBlocks.map((block) => {
               const wi = workItemById.get(block.workItemId);
               if (!wi) return null;
               const isLogged = block.state === "logged";
               const isSelected = selectedId === block.instanceId;
-              const linkedMeetings = meetingEntriesByWorkItem.get(block.workItemId) ?? [];
+              const needsUpdate = !isLogged && !!block.freshbooksEntryId;
 
               return (
-                <div key={block.instanceId}>
-                  <div
-                    ref={setEntryRef(block.instanceId)}
-                    className={mergeClasses(
-                      styles.entry,
-                      isLogged ? styles.entryLogged : styles.entryPlanned,
-                      isSelected ? styles.entrySelected : undefined
-                    )}
-                  >
-                    <div className={styles.entryHeader}>
-                      <span className={styles.entryTitle}>
-                        #{wi.id} — {wi.title}
-                      </span>
-                      <span
-                        className={mergeClasses(
-                          styles.entryBadge,
-                          isLogged ? styles.badgeLogged : styles.badgePlanned
-                        )}
-                      >
-                        {formatDuration(block.durationMinutes)}
-                      </span>
-                    </div>
-                    <div className={styles.entryMeta}>
-                      {wi.teamName} · {formatClock(block.startMinutes)} – {formatClock(block.startMinutes + block.durationMinutes)}
-                    </div>
-                    {block.sourceEventId && (
-                      <div className={styles.linkedMeetingBadge}>
-                        <Link16Regular />
-                        {eventById.get(block.sourceEventId)?.subject ?? "Meeting"}
-                      </div>
-                    )}
-                    <Input
-                      size="small"
-                      placeholder="Description..."
-                      value={block.description}
-                      onChange={(_, data) => updateBlock(block.instanceId, { description: data.value })}
-                      style={{ width: "100%" }}
-                    />
-                    <div className={styles.entryActions}>
-                      {!isLogged && (
-                        <Button
-                          size="small"
-                          appearance="primary"
-                          icon={<Clock16Regular />}
-                          onClick={() =>
-                            updateBlock(block.instanceId, {
-                              state: "logged",
-                              freshbooksEntryId: `fake-${Date.now()}`
-                            })
-                          }
-                        >
-                          Log
-                        </Button>
+                <div
+                  key={block.instanceId}
+                  ref={setEntryRef(block.instanceId)}
+                  className={mergeClasses(
+                    styles.entry,
+                    isLogged ? styles.entryLogged : styles.entryPlanned,
+                    isSelected ? styles.entrySelected : undefined
+                  )}
+                >
+                  <div className={styles.entryHeader}>
+                    <span className={styles.entryTitle}>
+                      #{wi.id} — {wi.title}
+                    </span>
+                    <span
+                      className={mergeClasses(
+                        styles.entryBadge,
+                        isLogged ? styles.badgeLogged : styles.badgePlanned
                       )}
-                      {isLogged && (
-                        <Button
-                          size="small"
-                          appearance="primary"
-                          icon={<Checkmark16Regular />}
-                          onClick={() =>
-                            updateBlock(block.instanceId, { description: block.description })
-                          }
-                        >
-                          Update
-                        </Button>
-                      )}
+                    >
+                      {formatDuration(block.durationMinutes)}
+                    </span>
+                  </div>
+                  <div className={styles.entryMeta}>
+                    {wi.teamName} · {formatClock(block.startMinutes)} – {formatClock(block.startMinutes + block.durationMinutes)}
+                  </div>
+                  {block.sourceEventId && (
+                    <div className={styles.linkedMeetingBadge}>
+                      <Link16Regular />
+                      {eventById.get(block.sourceEventId)?.subject ?? "Meeting"}
+                    </div>
+                  )}
+                  <Input
+                    size="small"
+                    placeholder="Description..."
+                    value={block.description}
+                    onChange={(_, data) => updateBlock(block.instanceId, { description: data.value })}
+                    style={{ width: "100%" }}
+                  />
+                  <div className={styles.entryActions}>
+                    {!isLogged && !needsUpdate && (
                       <Button
                         size="small"
-                        appearance="subtle"
-                        icon={<Delete16Regular />}
-                        onClick={() => removeBlock(block.instanceId)}
+                        appearance="primary"
+                        icon={<Clock16Regular />}
+                        onClick={() =>
+                          updateBlock(block.instanceId, {
+                            state: "logged",
+                            freshbooksEntryId: `fake-${Date.now()}`
+                          })
+                        }
                       >
-                        Remove
+                        Log
                       </Button>
-                    </div>
-                  </div>
-                  {/* Nested linked meetings for this work item */}
-                  {linkedMeetings.map((me) => {
-                    const event = eventById.get(me.eventId);
-                    if (!event) return null;
-                    const meIsLogged = me.state === "logged";
-                    return (
-                      <div
-                        key={me.eventId}
-                        ref={setEntryRef(`meeting-${me.eventId}`)}
-                        className={mergeClasses(
-                          styles.nestedMeeting,
-                          selectedId === `meeting-${me.eventId}` ? styles.entrySelected : undefined
-                        )}
+                    )}
+                    {needsUpdate && (
+                      <Button
+                        size="small"
+                        appearance="primary"
+                        icon={<Clock16Regular />}
+                        onClick={() =>
+                          updateBlock(block.instanceId, { state: "logged" })
+                        }
                       >
-                        <div className={styles.nestedHeader}>
-                          <span className={styles.nestedSubject}>
-                            <Link16Regular style={{ verticalAlign: "middle", marginRight: 4 }} />
-                            {event.subject}
-                          </span>
-                          <span style={{ fontSize: "10px", color: "#666" }}>
-                            {formatClock(parseIsoToMinutes(event.start))} – {formatClock(parseIsoToMinutes(event.end))}
-                          </span>
-                        </div>
-                        <Input
-                          size="small"
-                          placeholder="Description..."
-                          value={me.description}
-                          onChange={(_, data) => updateMeetingEntry(me.eventId, { description: data.value })}
-                          style={{ width: "100%" }}
-                        />
-                        <div className={styles.nestedActions}>
-                          <Input
-                            className={styles.durationInput}
-                            size="small"
-                            type="number"
-                            value={String(me.durationMinutes)}
-                            contentAfter={<span style={{ fontSize: "10px" }}>min</span>}
-                            onChange={(_, data) => {
-                              const val = parseInt(data.value, 10);
-                              if (!isNaN(val) && val > 0) {
-                                updateMeetingEntry(me.eventId, { durationMinutes: val });
-                              }
-                            }}
-                          />
-                          <span
-                            className={mergeClasses(
-                              styles.entryBadge,
-                              meIsLogged ? styles.badgeLogged : styles.badgePlanned
-                            )}
-                          >
-                            {formatDuration(me.durationMinutes)}
-                          </span>
-                          {!meIsLogged && (
-                            <Button
-                              size="small"
-                              appearance="primary"
-                              icon={<Clock16Regular />}
-                              onClick={() => updateMeetingEntry(me.eventId, { state: "logged" })}
-                            >
-                              Log
-                            </Button>
-                          )}
-                          {meIsLogged && (
-                            <Button
-                              size="small"
-                              appearance="subtle"
-                              icon={<Checkmark16Regular />}
-                              disabled
-                            >
-                              Logged
-                            </Button>
-                          )}
-                          <Button
-                            size="small"
-                            appearance="subtle"
-                            icon={<Delete16Regular />}
-                            onClick={() => removeMeetingEntry(me.eventId)}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+                        Update Entry
+                      </Button>
+                    )}
+                    {isLogged && (
+                      <Button
+                        size="small"
+                        appearance="primary"
+                        icon={<Checkmark16Regular />}
+                        onClick={() =>
+                          updateBlock(block.instanceId, { description: block.description })
+                        }
+                      >
+                        Save
+                      </Button>
+                    )}
+                    <Button
+                      size="small"
+                      appearance="subtle"
+                      icon={<Delete16Regular />}
+                      onClick={() => removeBlock(block.instanceId)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
                 </div>
               );
             })}
           </>
         )}
 
-        {/* Unlinked Meetings */}
-        {unlinkedEvents.length > 0 && (
+        {/* Meetings section — every meeting on this day */}
+        {events.length > 0 && (
           <>
-            <div className={styles.sectionLabel}>Unlinked Meetings</div>
-            {unlinkedEvents.map((event) => {
+            <div className={styles.sectionLabel}>Meetings</div>
+            {events.map((event) => {
               const start = parseIsoToMinutes(event.start);
               const end = parseIsoToMinutes(event.end);
+              const me = meetingEntryByEventId.get(event.id);
+              const linkedWi = me ? workItemById.get(me.workItemId) : undefined;
+
               return (
                 <div
                   key={event.id}
@@ -504,33 +429,123 @@ export function TimePanel({ workItems }: Props) {
                       {formatClock(start)} – {formatClock(end)} · {formatDuration(end - start)}
                     </span>
                   </div>
-                  <div className={styles.linkRow}>
-                    <Timer16Regular style={{ color: MEETING_BORDER, flexShrink: 0 }} />
-                    <Combobox
-                      className={styles.linkDropdown}
-                      placeholder="Link to task..."
-                      size="small"
-                      freeform={false}
-                      onOptionSelect={(_, data) => {
-                        if (data.optionValue) {
-                          handleLinkMeeting(event, parseInt(data.optionValue, 10));
-                        }
-                      }}
-                    >
-                      {workItems.map((wi) => (
-                        <Option key={wi.id} value={String(wi.id)} text={`#${wi.id} - ${wi.title} (${wi.teamName})`}>
-                          #{wi.id} - {wi.title} ({wi.teamName})
-                        </Option>
-                      ))}
-                    </Combobox>
-                  </div>
+
+                  {!me ? (
+                    /* Unlinked — show link dropdown */
+                    <div className={styles.linkRow}>
+                      <Timer16Regular style={{ color: MEETING_BORDER, flexShrink: 0 }} />
+                      <Combobox
+                        className={styles.linkDropdown}
+                        placeholder="Link to task..."
+                        size="small"
+                        freeform={false}
+                        onOptionSelect={(_, data) => {
+                          if (data.optionValue) {
+                            handleLinkMeeting(event, parseInt(data.optionValue, 10));
+                          }
+                        }}
+                      >
+                        {workItems.map((wi) => (
+                          <Option key={wi.id} value={String(wi.id)} text={`#${wi.id} - ${wi.title} (${wi.teamName})`}>
+                            #{wi.id} - {wi.title} ({wi.teamName})
+                          </Option>
+                        ))}
+                      </Combobox>
+                    </div>
+                  ) : (
+                    /* Linked — show entry details */
+                    <>
+                      <div className={styles.linkedTaskRow}>
+                        <Link16Regular style={{ color: MEETING_BORDER, flexShrink: 0 }} />
+                        <Combobox
+                          className={styles.linkDropdown}
+                          size="small"
+                          freeform={false}
+                          value={linkedWi ? `#${linkedWi.id} - ${linkedWi.title}` : ""}
+                          selectedOptions={[String(me.workItemId)]}
+                          onOptionSelect={(_, data) => {
+                            if (data.optionValue) {
+                              handleRelinkMeeting(event.id, parseInt(data.optionValue, 10));
+                            }
+                          }}
+                        >
+                          {workItems.map((wi) => (
+                            <Option key={wi.id} value={String(wi.id)} text={`#${wi.id} - ${wi.title} (${wi.teamName})`}>
+                              #{wi.id} - {wi.title} ({wi.teamName})
+                            </Option>
+                          ))}
+                        </Combobox>
+                      </div>
+                      <Input
+                        size="small"
+                        placeholder="Description..."
+                        value={me.description}
+                        onChange={(_, data) => updateMeetingEntry(me.eventId, { description: data.value })}
+                        style={{ width: "100%" }}
+                      />
+                      <div className={styles.durationRow}>
+                        <Button
+                          size="small"
+                          appearance="subtle"
+                          onClick={() => stepDuration(me.eventId, me.durationMinutes, -SNAP_MINUTES)}
+                          disabled={me.durationMinutes <= SNAP_MINUTES}
+                        >
+                          −
+                        </Button>
+                        <span
+                          className={mergeClasses(
+                            styles.entryBadge,
+                            me.state === "logged" ? styles.badgeLogged : styles.badgePlanned
+                          )}
+                        >
+                          {formatDuration(me.durationMinutes)} {me.state}
+                        </span>
+                        <Button
+                          size="small"
+                          appearance="subtle"
+                          onClick={() => stepDuration(me.eventId, me.durationMinutes, SNAP_MINUTES)}
+                        >
+                          +
+                        </Button>
+                      </div>
+                      <div className={styles.meetingActions}>
+                        {me.state !== "logged" ? (
+                          <Button
+                            size="small"
+                            appearance="primary"
+                            icon={<Clock16Regular />}
+                            onClick={() => updateMeetingEntry(me.eventId, { state: "logged" })}
+                          >
+                            Log
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            appearance="primary"
+                            icon={<Checkmark16Regular />}
+                            onClick={() => updateMeetingEntry(me.eventId, { state: "logged" })}
+                          >
+                            Save
+                          </Button>
+                        )}
+                        <Button
+                          size="small"
+                          appearance="subtle"
+                          icon={<Dismiss16Regular />}
+                          onClick={() => removeMeetingEntry(me.eventId)}
+                        >
+                          Unlink
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
           </>
         )}
 
-        {dateBlocks.length === 0 && unlinkedEvents.length === 0 && (
+        {dateBlocks.length === 0 && events.length === 0 && (
           <div className={styles.empty}>
             No time entries yet. Drag tasks onto the timeline or link meetings to tasks.
           </div>
