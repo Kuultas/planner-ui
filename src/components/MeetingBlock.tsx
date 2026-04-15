@@ -151,9 +151,10 @@ interface Props {
   associatedBlocks: BlockInstance[];
   linkedEntry?: MeetingTimeEntry;
   linkedWorkItem?: WorkItem;
+  overlapSide?: "left" | "right";
 }
 
-export function MeetingBlock({ event, dayStartMinutes, associatedBlocks, linkedEntry, linkedWorkItem }: Props) {
+export function MeetingBlock({ event, dayStartMinutes, associatedBlocks, linkedEntry, linkedWorkItem, overlapSide }: Props) {
   const styles = useStyles();
   const start = parseIsoToMinutes(event.start);
   const end = parseIsoToMinutes(event.end);
@@ -207,7 +208,12 @@ export function MeetingBlock({ event, dayStartMinutes, associatedBlocks, linkedE
   return (
     <div
       className={mergeClasses(styles.root, isCompact ? styles.compact : undefined)}
-      style={{ top: `${top}px`, height: `${height}px` }}
+      style={{
+        top: `${top}px`,
+        height: `${height}px`,
+        ...(overlapSide === "left" && { right: "calc(50% + 2px)" }),
+        ...(overlapSide === "right" && { left: "calc(50% + 2px)" })
+      }}
     >
       {isCompact ? (
         <div className={styles.compactRow}>

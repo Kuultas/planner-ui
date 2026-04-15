@@ -16,10 +16,8 @@ import {
 import { useDayStore } from "../state/useDayStore";
 
 const PLANNED_FILL = "#fff3e0";
-const PLANNED_FILL_ALPHA = "rgba(255, 243, 224, 0.6)";
 const PLANNED_BORDER = "#fb8c00";
 const LOGGED_FILL = "#e8f5e9";
-const LOGGED_FILL_ALPHA = "rgba(232, 245, 233, 0.6)";
 const LOGGED_BORDER = "#43a047";
 
 const useStyles = makeStyles({
@@ -47,32 +45,6 @@ const useStyles = makeStyles({
     borderLeftWidth: "3px",
     borderLeftStyle: "solid",
     borderLeftColor: LOGGED_BORDER
-  },
-  plannedOverlap: {
-    backgroundColor: PLANNED_FILL_ALPHA,
-    borderTopWidth: "1px",
-    borderTopStyle: "dashed",
-    borderTopColor: PLANNED_BORDER,
-    borderRightWidth: "1px",
-    borderRightStyle: "dashed",
-    borderRightColor: PLANNED_BORDER,
-    borderBottomWidth: "1px",
-    borderBottomStyle: "dashed",
-    borderBottomColor: PLANNED_BORDER,
-    boxShadow: "none"
-  },
-  loggedOverlap: {
-    backgroundColor: LOGGED_FILL_ALPHA,
-    borderTopWidth: "1px",
-    borderTopStyle: "dashed",
-    borderTopColor: LOGGED_BORDER,
-    borderRightWidth: "1px",
-    borderRightStyle: "dashed",
-    borderRightColor: LOGGED_BORDER,
-    borderBottomWidth: "1px",
-    borderBottomStyle: "dashed",
-    borderBottomColor: LOGGED_BORDER,
-    boxShadow: "none"
   },
   body: {
     flex: 1,
@@ -266,7 +238,7 @@ interface Props {
   block: BlockInstance;
   workItem: WorkItem;
   dayStartMinutes: number;
-  overlapsMeeting: boolean;
+  overlapSide?: "left" | "right";
   linkedMeeting?: CalendarEvent;
 }
 
@@ -274,7 +246,7 @@ export function TaskBlock({
   block,
   workItem,
   dayStartMinutes,
-  overlapsMeeting,
+  overlapSide,
   linkedMeeting
 }: Props) {
   const styles = useStyles();
@@ -362,11 +334,6 @@ export function TaskBlock({
     : undefined;
 
   const stateClass = isLogged ? styles.logged : styles.planned;
-  const overlapClass = overlapsMeeting
-    ? isLogged
-      ? styles.loggedOverlap
-      : styles.plannedOverlap
-    : undefined;
 
   const handleUpdateEntry = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -420,7 +387,6 @@ export function TaskBlock({
       className={mergeClasses(
         styles.root,
         stateClass,
-        overlapClass,
         isDragging ? styles.dragging : undefined
       )}
       style={{
@@ -429,6 +395,8 @@ export function TaskBlock({
         cursor: "pointer",
         outline: isSelected ? "2px solid #0f6cbd" : undefined,
         outlineOffset: isSelected ? "-1px" : undefined,
+        ...(overlapSide === "left" && { right: "calc(50% + 2px)" }),
+        ...(overlapSide === "right" && { left: "calc(50% + 2px)" }),
         ...transformStyle
       }}
       onClick={handleClick}

@@ -263,6 +263,7 @@ export function Timeline({ workItems }: Props) {
   const allWorkItemById = new Map(fakeWorkItems.map((wi) => [wi.id, wi]));
 
   const blocksOverlappingMeeting = new Set<string>();
+  const meetingsWithOverlap = new Set<string>();
   const associatedBlocksByEvent = new Map<string, BlockInstance[]>();
   const linkedMeetingByBlock = new Map<string, CalendarEvent>();
 
@@ -282,6 +283,9 @@ export function Timeline({ workItems }: Props) {
       return !(bEnd <= mStart || b.startMinutes >= mEnd);
     });
     associatedBlocksByEvent.set(e.id, associated);
+    if (associated.length > 0) {
+      meetingsWithOverlap.add(e.id);
+    }
     for (const b of associated) {
       blocksOverlappingMeeting.add(b.instanceId);
     }
@@ -350,6 +354,7 @@ export function Timeline({ workItems }: Props) {
                   associatedBlocks={associatedBlocksByEvent.get(e.id) ?? []}
                   linkedEntry={me}
                   linkedWorkItem={linkedWi}
+                  overlapSide={meetingsWithOverlap.has(e.id) ? "left" : undefined}
                 />
               );
             })}
@@ -362,7 +367,7 @@ export function Timeline({ workItems }: Props) {
                   block={b}
                   workItem={wi}
                   dayStartMinutes={DAY_START_MINUTES}
-                  overlapsMeeting={blocksOverlappingMeeting.has(b.instanceId)}
+                  overlapSide={blocksOverlappingMeeting.has(b.instanceId) ? "right" : undefined}
                   linkedMeeting={linkedMeetingByBlock.get(b.instanceId)}
                 />
               );
